@@ -1,0 +1,92 @@
+openapi: 3.1.0
+info:
+  title: Market Mock API
+  version: 1.0.0
+  description: Internal deterministic price service used by the local demo.
+servers:
+  - url: http://localhost:8082
+paths:
+  /health:
+    get:
+      operationId: getMarketMockHealth
+      summary: Report market mock health
+      responses:
+        "200":
+          description: Market mock is running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /v1/prices:
+    get:
+      operationId: getPrices
+      summary: Return prices for requested symbols in request order
+      parameters:
+        - name: symbols
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: ^[A-Z]+(,[A-Z]+)*$
+          example: AAPL,BND
+      responses:
+        "200":
+          description: All requested prices
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [prices]
+                properties:
+                  prices:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Price"
+        "404":
+          description: At least one requested symbol has no synthetic price
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  schemas:
+    Health:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+    Money:
+      type: object
+      additionalProperties: false
+      required: [amount_minor, currency]
+      properties:
+        amount_minor:
+          type: integer
+          format: int64
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+    Price:
+      type: object
+      additionalProperties: false
+      required: [symbol, price, as_of]
+      properties:
+        symbol:
+          type: string
+        price:
+          $ref: "#/components/schemas/Money"
+        as_of:
+          type: string
+          format: date-time
+    Error:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum: [price not found]

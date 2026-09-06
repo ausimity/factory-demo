@@ -1,0 +1,177 @@
+openapi: 3.1.0
+info:
+  title: Core Mock API
+  version: 1.0.0
+  description: >
+    Internal deterministic account service used by the local demo. The v2
+    response is intentionally incompatible and exists only for the contract
+    migration mission.
+servers:
+  - url: http://localhost:8081
+paths:
+  /health:
+    get:
+      operationId: getCoreMockHealth
+      summary: Report core mock health and active contract
+      responses:
+        "200":
+          description: Core mock is running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /v1/customers/{customerID}/accounts:
+    get:
+      operationId: getCustomerAccounts
+      summary: Return deterministic accounts
+      parameters:
+        - name: customerID
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^cust-[0-9]{4,12}$
+      responses:
+        "200":
+          description: >
+            Account data in the configured contract version. Baseline runs use
+            CoreV1Response; CORE_CONTRACT_VERSION=v2 selects CoreV2Response.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/CoreV1Response"
+                  - $ref: "#/components/schemas/CoreV2Response"
+        "404":
+          description: Synthetic customer does not exist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  schemas:
+    Health:
+      type: object
+      additionalProperties: false
+      required: [status, contractVersion]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        contractVersion:
+          type: string
+          enum: [v1, v2]
+    Error:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum: [not found]
+    CoreV1Response:
+      type: object
+      additionalProperties: false
+      required: [customer_id, accounts]
+      properties:
+        customer_id:
+          type: string
+        accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/CoreV1Account"
+    CoreV1Account:
+      type: object
+      additionalProperties: false
+      required: [account_id, account_type, cash_balance, positions]
+      properties:
+        account_id:
+          type: string
+        account_type:
+          type: string
+          enum: [BROKERAGE, RETIREMENT]
+        cash_balance:
+          $ref: "#/components/schemas/CoreV1Money"
+        positions:
+          type: array
+          items:
+            $ref: "#/components/schemas/CoreV1Position"
+    CoreV1Money:
+      type: object
+      additionalProperties: false
+      required: [amount_minor, currency]
+      properties:
+        amount_minor:
+          type: integer
+          format: int64
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+    CoreV1Position:
+      type: object
+      additionalProperties: false
+      required: [symbol, quantity]
+      properties:
+        symbol:
+          type: string
+        quantity:
+          type: string
+          pattern: ^[0-9]+(\.[0-9]+)?$
+    CoreV2Response:
+      type: object
+      additionalProperties: false
+      required: [client, portfolios]
+      properties:
+        client:
+          type: object
+          additionalProperties: false
+          required: [id]
+          properties:
+            id:
+              type: string
+        portfolios:
+          type: array
+          items:
+            $ref: "#/components/schemas/CoreV2Portfolio"
+    CoreV2Portfolio:
+      type: object
+      additionalProperties: false
+      required: [id, category, balances, assets]
+      properties:
+        id:
+          type: string
+        category:
+          type: string
+          enum: [BROKERAGE, RETIREMENT]
+        balances:
+          type: object
+          additionalProperties: false
+          required: [cash]
+          properties:
+            cash:
+              $ref: "#/components/schemas/CoreV2Money"
+        assets:
+          type: array
+          items:
+            $ref: "#/components/schemas/CoreV2Asset"
+    CoreV2Money:
+      type: object
+      additionalProperties: false
+      required: [minor_units, currency_code]
+      properties:
+        minor_units:
+          type: integer
+          format: int64
+        currency_code:
+          type: string
+          pattern: ^[A-Z]{3}$
+    CoreV2Asset:
+      type: object
+      additionalProperties: false
+      required: [ticker, units]
+      properties:
+        ticker:
+          type: string
+        units:
+          type: string
+          pattern: ^[0-9]+(\.[0-9]+)?$

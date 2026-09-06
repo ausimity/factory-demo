@@ -1,4 +1,4 @@
-# Runbook: Upstream contract failure
+# Runbook: Portfolio availability degradation
 
 ## Signal
 
@@ -43,23 +43,22 @@ The HTTP status is `502`. Request telemetry shows an increase in
    make test-integration
    ```
 
-## Likely cause
+## Investigation hypotheses
 
-The core API has switched from the flat v1 account payload to the renamed and
-restructured v2 payload in `internal/upstream/testdata/core-v2.json`. Strict JSON
-decoding turns contract drift into an explicit error rather than incorrect
-financial data.
+Use evidence to distinguish among dependency unavailability, timeout, malformed
+data, missing prices, and contract drift. Do not assume a cause from the alert
+name or change code before reproducing the failing boundary.
 
 ## Safe fix boundary
 
-Change the core adapter and its contract tests. Do not leak the v2 DTO into the
-domain, service, or public HTTP response. Preserve integer money rules and error
-redaction.
+Keep the correction at the narrowest boundary supported by evidence. Upstream
+wire types must not leak into the domain, service, or public HTTP response.
+Preserve integer money rules, strict validation, and error redaction.
 
 ## Verification
 
 1. `make validate`
-2. Start the stack with `CORE_CONTRACT_VERSION=v2 docker compose up --build -d`.
+2. Keep the incident conditions active.
 3. `./scripts/wait-for-api.sh`
 4. `make test-e2e`
 5. Confirm the public response still matches `api/openapi.yaml`.
@@ -67,4 +66,5 @@ redaction.
 
 ## Rollback
 
-Run `make demo-reset` to restore the v1 upstream while a code fix is reviewed.
+Run `make demo-reset` to restore the healthy baseline while a code fix is
+reviewed.

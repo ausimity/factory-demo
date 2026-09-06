@@ -31,29 +31,31 @@ logs are readable from `.local/logs`, and no credentials are involved.
 - Explain that the readiness model turns vague "AI-friendly" claims into
   measurable engineering foundations.
 
-## 4. Trigger a realistic break (5 minutes)
+## 4. Let telemetry detect an incident (5 minutes)
 
 ```bash
-make demo-break-upstream
-grep 'portfolio aggregation failed' .local/logs/portfolio-api.jsonl | tail -1 | jq
+make demo-trigger-incident
+cat .local/incidents/active.json | jq
 ```
 
-Show that the customer gets a controlled `502`, not bad financial data. Show the
-trace and the incompatible v2 fixture. Do not explain the implementation fix.
+Show the firing Prometheus alert and controlled customer-facing `502`. Do not
+show the fault-injection mechanism, detailed application error, or incompatible
+fixture. The audience and Mission should begin with symptoms and impact.
 
 ## 5. Start the Mission (15 to 25 minutes)
 
 Enter `/missions`, then provide the contents of
-`docs/missions/01-core-v2.md`. During planning:
+`docs/missions/01-portfolio-incident.md`. During planning:
 
 - let Droid discover the repository evidence;
-- ask it to explain the blast radius and milestones;
+- require it to separate diagnosis, remediation, and validation milestones;
+- ask it to explain its evidence and blast radius;
 - confirm that it preserves the public contract;
 - highlight feature and validation workers;
 - approve the plan and monitor Mission Control.
 
-When complete, review the changed adapter, contract tests, validation evidence,
-and running v2 stack.
+When complete, review the diagnosis, corrective change, regression tests,
+validation evidence, and recovered running stack.
 
 ## 6. Close with the differentiation (5 minutes)
 

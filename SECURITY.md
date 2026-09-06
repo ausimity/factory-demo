@@ -18,6 +18,9 @@ security issue privately to the repository owner rather than in a public issue.
 - `.env` files and runtime logs are excluded from version control.
 - Pre-commit secret scanning uses Gitleaks when available and a conservative
   local fallback otherwise.
+- Hosted and local security checks run Gosec against source and govulncheck
+  against reachable dependency code. `make security` writes reviewable reports
+  under `artifacts/`; hosted CI retains them for 30 days.
 
 ## Required review
 

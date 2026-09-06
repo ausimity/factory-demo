@@ -14,6 +14,10 @@ institution. It aggregates account positions from `core-mock` with prices from
 - Run integration tests: `make test-integration`
 - Run all tests: `make test`
 - Run static checks: `make lint`
+- Run complexity and duplication checks: `make quality`
+- Run source and dependency security scans: `make security`
+- Verify dependency manifests: `make check-deps`
+- Validate this guide: `make check-agents`
 - Build all binaries: `make build`
 - Run the complete local gate: `make validate`
 - Exercise a running stack: `make test-e2e`
@@ -31,6 +35,7 @@ test for every bug fix and tests for every new behavior.
 - `internal/httpapi/` owns public HTTP routing and error mapping.
 - `internal/observability/` owns logging, metrics, and tracing setup.
 - `api/openapi.yaml` is the hand-maintained public API source of truth.
+- `api/*-mock.openapi.yaml` documents the private deterministic mock APIs.
 - `deploy/` contains local observability configuration.
 - `docs/` contains architecture, runbooks, and demo material.
 
@@ -56,7 +61,8 @@ test for every bug fix and tests for every new behavior.
 
 ## Generated files
 
-There are currently no generated files. `api/openapi.yaml` is edited by hand.
+There are currently no generated files. The OpenAPI files in `api/` are edited
+by hand and validated by `internal/contracts/openapi_test.go`.
 If generation is introduced, commit both its source and output and document the
 exact regeneration command here.
 

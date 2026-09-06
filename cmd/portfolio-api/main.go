@@ -28,7 +28,7 @@ func main() {
 
 	shutdownTracing, err := observability.SetupTracing(
 		context.Background(),
-		envOrDefault("OTEL_SERVICE_NAME", "portfolio-api"),
+		app.EnvOrDefault("OTEL_SERVICE_NAME", "portfolio-api"),
 		os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
 	)
 	if err != nil {
@@ -43,7 +43,7 @@ func main() {
 		}
 	}()
 
-	requestTimeout, err := time.ParseDuration(envOrDefault("REQUEST_TIMEOUT", "2s"))
+	requestTimeout, err := time.ParseDuration(app.EnvOrDefault("REQUEST_TIMEOUT", "2s"))
 	if err != nil {
 		logger.Error("parse REQUEST_TIMEOUT", "error", err)
 		os.Exit(1)
@@ -61,13 +61,13 @@ func main() {
 			ResponseHeaderTimeout: requestTimeout,
 		}),
 	}
-	coreClient := upstream.NewCoreClient(envOrDefault("CORE_API_BASE_URL", "http://localhost:8081"), client)
-	marketClient := upstream.NewMarketClient(envOrDefault("MARKET_API_BASE_URL", "http://localhost:8082"), client)
+	coreClient := upstream.NewCoreClient(app.EnvOrDefault("CORE_API_BASE_URL", "http://localhost:8081"), client)
+	marketClient := upstream.NewMarketClient(app.EnvOrDefault("MARKET_API_BASE_URL", "http://localhost:8082"), client)
 	service := portfolio.NewService(coreClient, marketClient)
 	handler := httpapi.NewHandler(service, logger, observability.NewMetrics())
 
 	server := &http.Server{
-		Addr:              ":" + envOrDefault("PORT", "8080"),
+		Addr:              ":" + app.EnvOrDefault("PORT", "8080"),
 		Handler:           otelhttp.NewHandler(handler, "portfolio-api"),
 		ReadHeaderTimeout: 2 * time.Second,
 		ReadTimeout:       5 * time.Second,
@@ -79,11 +79,4 @@ func main() {
 		logger.Error("server stopped", "error", err)
 		os.Exit(1)
 	}
-}
-
-func envOrDefault(name, fallback string) string {
-	if value := os.Getenv(name); value != "" {
-		return value
-	}
-	return fallback
 }

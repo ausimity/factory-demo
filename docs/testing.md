@@ -4,11 +4,16 @@
 
 | Layer | Command | Evidence |
 | --- | --- | --- |
-| Domain and service unit tests | `make test-unit` | Money precision and aggregation rules |
-| Adapter and handler integration tests | `make test-integration` | Wire-contract mapping and HTTP behavior |
-| Full Go suite with race detector | `make test` | Concurrency safety and regressions |
-| Static and build gate | `make validate` | Formatting, vet, tests, all binaries |
+| Unit tests | `make test-unit` | Mock endpoints, money precision, and aggregation rules |
+| Integration tests | `make test-integration` | Wire-contract mapping, HTTP behavior, and valid OpenAPI |
+| Full Go suite | `make test` | Race detection, JUnit/JSON timing reports, and at least 50% total coverage |
+| Static and build gate | `make validate` | Formatting, vet, complexity, duplication, dependency hygiene, tests, and binaries |
+| Security reports | `make security` | Gosec source findings and Go vulnerability results in `artifacts/` |
 | Running-system check | `make test-e2e` | Baseline API, health, totals, and metrics |
+
+The hosted CI workflow retains JUnit, Go test JSON, and coverage profiles for
+14 days. Its job summary lists the ten slowest tests so regressions in suite
+duration are visible during review.
 
 ## Contract fixtures
 
@@ -27,5 +32,8 @@ otherwise.
 - New public fields require OpenAPI and handler tests.
 - New financial rules require table-driven domain or service tests.
 - Adapter changes require realistic JSON fixture tests.
+- Keep cyclomatic complexity at or below 15 and duplicate blocks below 100
+  tokens. Refactor shared behavior rather than suppressing either check.
+- Keep total statement coverage at or above 50%.
 - Run the focused suite while iterating, then `make validate`.
 - Run `make test-e2e` for runtime behavior changes.

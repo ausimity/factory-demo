@@ -19,6 +19,9 @@ func TestMetricsRenderPrometheusText(t *testing.T) {
 	if !strings.Contains(output.String(), `status="200"} 1`) {
 		t.Fatalf("metrics output missing request count:\n%s", output.String())
 	}
+	if !strings.Contains(output.String(), `status="502"} 0`) {
+		t.Fatalf("metrics output missing zero-value failure series:\n%s", output.String())
+	}
 	if !strings.Contains(output.String(), "portfolio_http_request_duration_seconds_count 1") {
 		t.Fatalf("metrics output missing duration count:\n%s", output.String())
 	}

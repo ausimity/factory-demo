@@ -1,0 +1,13 @@
+groups:
+  - name: portfolio-api
+    rules:
+      - alert: PortfolioAPIHigh502Rate
+        expr: sum(increase(portfolio_http_requests_total{status="502"}[30s])) >= 3
+        for: 5s
+        labels:
+          severity: critical
+          service: portfolio-api
+        annotations:
+          summary: Portfolio API availability is degraded
+          description: Synthetic monitoring observed at least three HTTP 502 responses in 30 seconds.
+          runbook: docs/runbooks/portfolio-availability.md

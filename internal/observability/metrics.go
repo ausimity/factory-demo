@@ -16,7 +16,12 @@ type Metrics struct {
 }
 
 func NewMetrics() *Metrics {
-	return &Metrics{requests: make(map[string]uint64)}
+	return &Metrics{requests: map[string]uint64{
+		"200": 0,
+		"400": 0,
+		"404": 0,
+		"502": 0,
+	}}
 }
 
 func (m *Metrics) Observe(status int, duration time.Duration) {

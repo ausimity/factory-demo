@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -9,6 +8,7 @@ import (
 	"time"
 
 	"github.com/factory-demo/portfolio-api/internal/app"
+	"github.com/factory-demo/portfolio-api/internal/mockhttp"
 	"github.com/factory-demo/portfolio-api/internal/observability"
 )
 
@@ -32,27 +32,9 @@ func main() {
 	}
 	defer func() { _ = closeLog() }()
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", func(writer http.ResponseWriter, _ *http.Request) {
-		writeJSON(writer, http.StatusOK, map[string]string{"status": "ok"})
-	})
-	mux.HandleFunc("GET /v1/prices", func(writer http.ResponseWriter, request *http.Request) {
-		symbols := strings.Split(request.URL.Query().Get("symbols"), ",")
-		result := make([]any, 0, len(symbols))
-		for _, symbol := range symbols {
-			price, ok := prices[symbol]
-			if !ok {
-				writeJSON(writer, http.StatusNotFound, map[string]string{"error": "price not found"})
-				return
-			}
-			result = append(result, price)
-		}
-		writeJSON(writer, http.StatusOK, map[string]any{"prices": result})
-	})
-
 	server := &http.Server{
-		Addr:              ":" + envOrDefault("PORT", "8082"),
-		Handler:           mux,
+		Addr:              ":" + app.EnvOrDefault("PORT", "8082"),
+		Handler:           newHandler(),
 		ReadHeaderTimeout: 2 * time.Second,
 		ReadTimeout:       5 * time.Second,
 		WriteTimeout:      5 * time.Second,
@@ -64,15 +46,23 @@ func main() {
 	}
 }
 
-func writeJSON(writer http.ResponseWriter, status int, value any) {
-	writer.Header().Set("Content-Type", "application/json")
-	writer.WriteHeader(status)
-	_ = json.NewEncoder(writer).Encode(value)
-}
-
-func envOrDefault(name, fallback string) string {
-	if value := os.Getenv(name); value != "" {
-		return value
-	}
-	return fallback
+func newHandler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", func(writer http.ResponseWriter, _ *http.Request) {
+		mockhttp.WriteJSON(writer, http.StatusOK, map[string]string{"status": "ok"})
+	})
+	mux.HandleFunc("GET /v1/prices", func(writer http.ResponseWriter, request *http.Request) {
+		symbols := strings.Split(request.URL.Query().Get("symbols"), ",")
+		result := make([]any, 0, len(symbols))
+		for _, symbol := range symbols {
+			price, ok := prices[symbol]
+			if !ok {
+				mockhttp.WriteJSON(writer, http.StatusNotFound, map[string]string{"error": "price not found"})
+				return
+			}
+			result = append(result, price)
+		}
+		mockhttp.WriteJSON(writer, http.StatusOK, map[string]any{"prices": result})
+	})
+	return mux
 }

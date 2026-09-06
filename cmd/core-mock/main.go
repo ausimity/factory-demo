@@ -1,13 +1,14 @@
 package main
 
 import (
-	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/factory-demo/portfolio-api/internal/app"
+	"github.com/factory-demo/portfolio-api/internal/mockhttp"
 	"github.com/factory-demo/portfolio-api/internal/observability"
 )
 
@@ -18,27 +19,15 @@ func main() {
 	}
 	defer func() { _ = closeLog() }()
 
-	version := envOrDefault("CORE_CONTRACT_VERSION", "v1")
+	version, err := parseContractVersion(app.EnvOrDefault("CORE_CONTRACT_VERSION", "v1"))
+	if err != nil {
+		logger.Error("invalid core mock configuration", "error", err)
+		os.Exit(1)
+	}
 	logger.Info("core mock configured", "contract_version", version)
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", func(writer http.ResponseWriter, _ *http.Request) {
-		writeJSON(writer, http.StatusOK, map[string]string{"status": "ok", "contractVersion": version})
-	})
-	mux.HandleFunc("GET /v1/customers/{customerID}/accounts", func(writer http.ResponseWriter, request *http.Request) {
-		if request.PathValue("customerID") != "cust-1001" {
-			writeJSON(writer, http.StatusNotFound, map[string]string{"error": "not found"})
-			return
-		}
-		if version == "v2" {
-			writeJSON(writer, http.StatusOK, v2Response())
-			return
-		}
-		writeJSON(writer, http.StatusOK, v1Response())
-	})
-
 	server := &http.Server{
-		Addr:              ":" + envOrDefault("PORT", "8081"),
-		Handler:           mux,
+		Addr:              ":" + app.EnvOrDefault("PORT", "8081"),
+		Handler:           newHandler(version),
 		ReadHeaderTimeout: 2 * time.Second,
 		ReadTimeout:       5 * time.Second,
 		WriteTimeout:      5 * time.Second,
@@ -47,6 +36,34 @@ func main() {
 	if err := app.RunServer(logger, server); err != nil {
 		logger.Error("server stopped", "error", err)
 		os.Exit(1)
+	}
+}
+
+func newHandler(version string) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", func(writer http.ResponseWriter, _ *http.Request) {
+		mockhttp.WriteJSON(writer, http.StatusOK, map[string]string{"status": "ok", "contractVersion": version})
+	})
+	mux.HandleFunc("GET /v1/customers/{customerID}/accounts", func(writer http.ResponseWriter, request *http.Request) {
+		if request.PathValue("customerID") != "cust-1001" {
+			mockhttp.WriteJSON(writer, http.StatusNotFound, map[string]string{"error": "not found"})
+			return
+		}
+		if version == "v2" {
+			mockhttp.WriteJSON(writer, http.StatusOK, v2Response())
+			return
+		}
+		mockhttp.WriteJSON(writer, http.StatusOK, v1Response())
+	})
+	return mux
+}
+
+func parseContractVersion(value string) (string, error) {
+	switch value {
+	case "v1", "v2":
+		return value, nil
+	default:
+		return "", fmt.Errorf("unsupported CORE_CONTRACT_VERSION %q", value)
 	}
 }
 
@@ -103,17 +120,4 @@ func v2Response() any {
 			},
 		},
 	}
-}
-
-func writeJSON(writer http.ResponseWriter, status int, value any) {
-	writer.Header().Set("Content-Type", "application/json")
-	writer.WriteHeader(status)
-	_ = json.NewEncoder(writer).Encode(value)
-}
-
-func envOrDefault(name, fallback string) string {
-	if value := os.Getenv(name); value != "" {
-		return value
-	}
-	return fallback
 }

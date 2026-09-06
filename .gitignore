@@ -2,6 +2,7 @@
 /bin/
 /coverage.out
 /coverage.html
+/artifacts/
 
 # Local runtime data
 /.local/
@@ -13,6 +14,7 @@
 
 # Editors and operating systems
 .DS_Store
+*.swp
 .idea/
 .vscode/*
 !.vscode/extensions.json

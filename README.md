@@ -70,7 +70,10 @@ See [the architecture guide](docs/architecture.md) for boundaries and decisions.
 
 ## Public API
 
-The source of truth is [`api/openapi.yaml`](api/openapi.yaml).
+The public source of truth is [`api/openapi.yaml`](api/openapi.yaml). The
+deterministic upstream contracts are documented in
+[`api/core-mock.openapi.yaml`](api/core-mock.openapi.yaml) and
+[`api/market-mock.openapi.yaml`](api/market-mock.openapi.yaml).
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -88,6 +91,7 @@ make help              # list supported commands
 make test-unit         # fast domain and service tests
 make test-integration  # adapter and HTTP tests
 make validate          # format check, vet, tests, and builds
+make security          # source and dependency security reports
 make test-e2e          # verify a running baseline stack
 ```
 
@@ -99,16 +103,18 @@ The exact agent instructions and completion rules live in
 
 The repository supports two Mission-ready change scenarios:
 
-1. **Breaking upstream release.** `make demo-break-upstream` changes the core
-   mock to a renamed and restructured v2 payload. The public endpoint returns a
-   controlled `502`, logs explain the contract error, and traces show the failed
-   dependency. Use [`docs/missions/01-core-v2.md`](docs/missions/01-core-v2.md)
-   as the Mission request.
+1. **Telemetry-detected availability incident.** `make demo-trigger-incident`
+   injects a deterministic but undisclosed fault, generates customer traffic,
+   and waits for Prometheus to raise an alert. Use
+   [`docs/missions/01-portfolio-incident.md`](docs/missions/01-portfolio-incident.md)
+   as the root-cause-neutral Mission request.
 2. **Personalized insights.** Use
    [`docs/missions/02-personalized-insights.md`](docs/missions/02-personalized-insights.md)
    as a new product request after the integration is healthy.
 
 The full interview storyline is in [`docs/demo-guide.md`](docs/demo-guide.md).
+See [`docs/automation/telemetry-trigger.md`](docs/automation/telemetry-trigger.md)
+for production telemetry-to-Droid automation options.
 
 ## Agent readiness
 
@@ -118,7 +124,10 @@ This repository includes:
 - an exact `AGENTS.md` project briefing;
 - unit, integration, contract, and end-to-end tests;
 - a one-command development environment and a dev container;
-- formatting, static analysis, pre-commit hooks, and secret scanning;
+- hosted CI, enforced coverage, test timing, dependency hygiene, complexity and
+  duplicate-code gates;
+- automated dependency updates, static security reports, pre-commit hooks, and
+  secret scanning;
 - structured logs, metrics, distributed tracing, health checks, and a runbook;
 - CODEOWNERS, pull request expectations, and structured issue templates.
 
