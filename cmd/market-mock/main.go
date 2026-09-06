@@ -1,0 +1,78 @@
+package main
+
+import (
+	"encoding/json"
+	"log"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/factory-demo/portfolio-api/internal/app"
+	"github.com/factory-demo/portfolio-api/internal/observability"
+)
+
+var prices = map[string]any{
+	"AAPL": map[string]any{
+		"symbol": "AAPL",
+		"price":  map[string]any{"amount_minor": 18525, "currency": "USD"},
+		"as_of":  "2026-09-05T12:00:00Z",
+	},
+	"BND": map[string]any{
+		"symbol": "BND",
+		"price":  map[string]any{"amount_minor": 5375, "currency": "USD"},
+		"as_of":  "2026-09-05T12:00:00Z",
+	},
+}
+
+func main() {
+	logger, closeLog, err := observability.NewLogger("market-mock", os.Getenv("LOG_FILE"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() { _ = closeLog() }()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", func(writer http.ResponseWriter, _ *http.Request) {
+		writeJSON(writer, http.StatusOK, map[string]string{"status": "ok"})
+	})
+	mux.HandleFunc("GET /v1/prices", func(writer http.ResponseWriter, request *http.Request) {
+		symbols := strings.Split(request.URL.Query().Get("symbols"), ",")
+		result := make([]any, 0, len(symbols))
+		for _, symbol := range symbols {
+			price, ok := prices[symbol]
+			if !ok {
+				writeJSON(writer, http.StatusNotFound, map[string]string{"error": "price not found"})
+				return
+			}
+			result = append(result, price)
+		}
+		writeJSON(writer, http.StatusOK, map[string]any{"prices": result})
+	})
+
+	server := &http.Server{
+		Addr:              ":" + envOrDefault("PORT", "8082"),
+		Handler:           mux,
+		ReadHeaderTimeout: 2 * time.Second,
+		ReadTimeout:       5 * time.Second,
+		WriteTimeout:      5 * time.Second,
+		IdleTimeout:       30 * time.Second,
+	}
+	if err := app.RunServer(logger, server); err != nil {
+		logger.Error("server stopped", "error", err)
+		os.Exit(1)
+	}
+}
+
+func writeJSON(writer http.ResponseWriter, status int, value any) {
+	writer.Header().Set("Content-Type", "application/json")
+	writer.WriteHeader(status)
+	_ = json.NewEncoder(writer).Encode(value)
+}
+
+func envOrDefault(name, fallback string) string {
+	if value := os.Getenv(name); value != "" {
+		return value
+	}
+	return fallback
+}

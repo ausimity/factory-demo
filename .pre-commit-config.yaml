@@ -1,0 +1,18 @@
+repos:
+  - repo: local
+    hooks:
+      - id: go-format
+        name: Check Go formatting
+        entry: make check-fmt
+        language: system
+        pass_filenames: false
+      - id: go-test
+        name: Run Go tests
+        entry: make test
+        language: system
+        pass_filenames: false
+      - id: secret-scan
+        name: Scan staged content for likely secrets
+        entry: scripts/check-secrets.sh
+        language: system
+        pass_filenames: false

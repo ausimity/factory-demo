@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: portfolio-api
+    static_configs:
+      - targets: ["portfolio-api:8080"]

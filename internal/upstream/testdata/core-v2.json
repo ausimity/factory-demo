@@ -1,0 +1,23 @@
+{
+  "client": {
+    "id": "cust-1001"
+  },
+  "portfolios": [
+    {
+      "id": "acct-brokerage-01",
+      "category": "BROKERAGE",
+      "balances": {
+        "cash": {
+          "minor_units": 250000,
+          "currency_code": "USD"
+        }
+      },
+      "assets": [
+        {
+          "ticker": "AAPL",
+          "units": "100"
+        }
+      ]
+    }
+  ]
+}

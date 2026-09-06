@@ -1,0 +1,11 @@
+title = "Portfolio API secret scanning"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic identifiers and local-only Grafana credentials"
+paths = [
+  '''deploy/grafana/provisioning/datasources/datasources\.yaml''',
+  '''docs/.*''',
+]

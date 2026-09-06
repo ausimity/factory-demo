@@ -1,0 +1,4 @@
+* @portfolio-platform
+/api/ @portfolio-platform @api-governance
+/internal/domain/ @portfolio-platform @financial-controls
+/deploy/ @portfolio-platform @sre

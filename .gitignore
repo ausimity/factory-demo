@@ -1,0 +1,19 @@
+# Build outputs
+/bin/
+/coverage.out
+/coverage.html
+
+# Local runtime data
+/.local/
+*.log
+
+# Local configuration
+.env
+.env.local
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json

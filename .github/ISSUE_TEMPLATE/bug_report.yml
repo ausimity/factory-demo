@@ -1,0 +1,46 @@
+name: Bug report
+description: Report reproducible incorrect behavior
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: Include the endpoint, status, correlation ID, and sanitized evidence.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Start with ...
+        2. Request ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Customer impact
+      options:
+        - None (internal only)
+        - Degraded experience
+        - Feature unavailable
+        - Incorrect financial data
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: State how the fix can be verified.
+    validations:
+      required: true

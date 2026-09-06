@@ -1,0 +1,16 @@
+{
+  "name": "Portfolio API",
+  "image": "mcr.microsoft.com/devcontainers/go:1-1.26-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "postCreateCommand": "go mod download",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "redhat.vscode-yaml"
+      ]
+    }
+  }
+}

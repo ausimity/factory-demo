@@ -1,0 +1,19 @@
+{
+  "customer_id": "cust-1001",
+  "accounts": [
+    {
+      "account_id": "acct-brokerage-01",
+      "account_type": "BROKERAGE",
+      "cash_balance": {
+        "amount_minor": 250000,
+        "currency": "USD"
+      },
+      "positions": [
+        {
+          "symbol": "AAPL",
+          "quantity": "100"
+        }
+      ]
+    }
+  ]
+}
