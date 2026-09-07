@@ -61,6 +61,20 @@ type fullPath struct {
 
 func newFullPath(t *testing.T, client *http.Client, coreFn http.HandlerFunc) *fullPath {
 	t.Helper()
+	return newFullPathWithMarket(t, client, coreFn, defaultMarket())
+}
+
+// defaultMarket serves the seeded prices so the aggregated portfolio totals
+// 34375.00 USD.
+func defaultMarket() http.HandlerFunc {
+	return func(writer http.ResponseWriter, _ *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(writer, marketPricesBody)
+	}
+}
+
+func newFullPathWithMarket(t *testing.T, client *http.Client, coreFn, marketFn http.HandlerFunc) *fullPath {
+	t.Helper()
 
 	coreCalls := &atomic.Int64{}
 	marketCalls := &atomic.Int64{}
@@ -81,8 +95,7 @@ func newFullPath(t *testing.T, client *http.Client, coreFn http.HandlerFunc) *fu
 			return
 		}
 		marketCalls.Add(1)
-		writer.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(writer, marketPricesBody)
+		marketFn(writer, request)
 	}))
 	t.Cleanup(marketServer.Close)
 
@@ -139,8 +152,9 @@ func stallCore(writeHeader bool) http.HandlerFunc {
 	}
 }
 
-// resetCore hijacks and closes the connection to simulate a transport failure.
-func resetCore() http.HandlerFunc {
+// resetConnection hijacks and closes the connection to simulate a transport
+// failure at either upstream boundary.
+func resetConnection() http.HandlerFunc {
 	return func(writer http.ResponseWriter, _ *http.Request) {
 		hijacker, ok := writer.(http.Hijacker)
 		if !ok {
@@ -484,7 +498,7 @@ func TestFullPathValidationDiagnosticsArePayloadIndependent(t *testing.T) {
 		{
 			name:       "transport error with sentinel customer path",
 			customerID: sentinelCustomer,
-			coreFn:     resetCore(),
+			coreFn:     resetConnection(),
 		},
 		{
 			name:       "timeout with sentinel customer path",

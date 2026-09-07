@@ -345,15 +345,18 @@ func (c *CoreClient) get(ctx context.Context, endpoint string) (*http.Response, 
 	}
 	response, err := c.client.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("call core: %w", coreTransportError(err))
+		return nil, fmt.Errorf("call core: %w", redactedTransportError(err))
 	}
 	return response, nil
 }
 
-// coreTransportError strips the request URL, which contains the customer
-// identifier, from a client error while preserving cancellation and deadline
-// semantics for callers that inspect the error chain.
-func coreTransportError(err error) error {
+// redactedTransportError strips the request URL from a client error before it
+// propagates. The upstream request URLs embed sensitive query data (the Core
+// customer identifier and the Market queried tickers), so the *url.Error's URL
+// must not reach logs or public responses. The underlying error is preserved so
+// callers inspecting the chain still observe cancellation and deadline
+// semantics.
+func redactedTransportError(err error) error {
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
 		return urlErr.Err
@@ -406,7 +409,7 @@ func (c *MarketClient) Prices(ctx context.Context, symbols []string) (map[string
 	}
 	response, err := c.client.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("call market: %w", err)
+		return nil, fmt.Errorf("call market: %w", redactedTransportError(err))
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
