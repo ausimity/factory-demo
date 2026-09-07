@@ -7,9 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +24,17 @@ const maxResponseBytes = 1 << 20
 // coreCurrencyPattern enforces the v2 contract's uppercase three-letter currency
 // code. The v1 path keeps its historically lenient domain.NewMoney handling.
 var coreCurrencyPattern = regexp.MustCompile(`^[A-Z]{3}$`)
+
+// Fixed, payload-independent Core failure classes. Strict-decode errors from
+// encoding/json echo payload-derived content such as unknown field names, so
+// they are never wrapped into the propagated error. The invalid-quantity class
+// preserves errors.Is(err, domain.ErrInvalidQuantity) while discarding the
+// offending value that the domain parser embeds in its own error text.
+var (
+	errCoreEnvelopeDecode = errors.New("core response envelope failed strict decoding")
+	errCoreStrictDecode   = errors.New("core response failed strict decoding")
+	errCoreInvalidQty     = fmt.Errorf("core position quantity failed contract validation: %w", domain.ErrInvalidQuantity)
+)
 
 type CoreClient struct {
 	baseURL string
@@ -171,7 +184,7 @@ func readBoundedBody(body io.Reader) ([]byte, error) {
 func detectCoreVersion(raw []byte) (coreVersion, error) {
 	var top map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &top); err != nil {
-		return coreVersionUnknown, fmt.Errorf("decode core response envelope: %w", err)
+		return coreVersionUnknown, errCoreEnvelopeDecode
 	}
 	_, hasCustomerID := top["customer_id"]
 	_, hasAccounts := top["accounts"]
@@ -199,7 +212,7 @@ func strictDecodeCore(raw []byte, target any) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
-		return fmt.Errorf("decode core response: %w", err)
+		return errCoreStrictDecode
 	}
 	if err := decoder.Decode(new(json.RawMessage)); !errors.Is(err, io.EOF) {
 		return errors.New("core response contains trailing data")
@@ -226,18 +239,55 @@ func coreParseMoney(minor *int64, currency *string, strictCurrency bool) (domain
 }
 
 // coreParsePosition validates a nonempty symbol and present quantity, then
-// parses the quantity with the existing exact fixed-precision parser.
-func coreParsePosition(symbol *string, quantity *string) (domain.Position, error) {
+// parses the quantity with the existing exact fixed-precision parser. When
+// strictQuantity is set (the v2 contract), the raw units string must also
+// satisfy the strict v2 grammar and int64 range before parsing; the v1 path
+// keeps the shared parser's historically lenient handling.
+func coreParsePosition(symbol *string, quantity *string, strictQuantity bool) (domain.Position, error) {
 	if symbol == nil || *symbol == "" || quantity == nil {
 		return domain.Position{}, errors.New("core position failed contract validation")
+	}
+	if strictQuantity && !validCoreV2Quantity(*quantity) {
+		return domain.Position{}, errCoreInvalidQty
 	}
 	value, err := domain.ParseQuantity(*quantity)
 	if err != nil {
 		// The parse error embeds the offending quantity value; return a fixed
-		// safe class instead so a payload-derived quantity cannot reach logs.
-		return domain.Position{}, errors.New("core position quantity failed contract validation")
+		// safe class that still satisfies errors.Is(err, ErrInvalidQuantity) so
+		// a payload-derived quantity cannot reach logs.
+		return domain.Position{}, errCoreInvalidQty
 	}
 	return domain.Position{Symbol: *symbol, Quantity: value}, nil
+}
+
+// validCoreV2Quantity enforces the v2 contract's strict decimal grammar and
+// int64 range for asset units. The shared domain parser trims surrounding
+// whitespace, tolerates a leading plus and a trailing dot, and can silently
+// overflow when whole units exceed the int64 millionths range; v2 rejects all
+// of these. Other malformed values remain the domain parser's responsibility.
+func validCoreV2Quantity(raw string) bool {
+	if raw != strings.TrimSpace(raw) || strings.HasPrefix(raw, "+") || strings.HasSuffix(raw, ".") {
+		return false
+	}
+	return !coreV2QuantityOverflows(raw)
+}
+
+// coreV2QuantityOverflows reports whether a grammatically plausible quantity
+// whose whole part fits in int64 would still overflow the millionths
+// representation. Values the domain parser already rejects (non-numeric,
+// negative, or excessive precision) return false so a single wrapped
+// invalid-quantity error is produced by the parser instead.
+func coreV2QuantityOverflows(raw string) bool {
+	whole, fraction, _ := strings.Cut(raw, ".")
+	wholeValue, err := strconv.ParseInt(whole, 10, 64)
+	if err != nil || wholeValue < 0 || len(fraction) > 6 {
+		return false
+	}
+	fractional, err := strconv.ParseInt(fraction+strings.Repeat("0", 6-len(fraction)), 10, 64)
+	if err != nil {
+		return false
+	}
+	return wholeValue > (math.MaxInt64-fractional)/1_000_000
 }
 
 func mapCoreV1(payload coreV1Response, customerID string) ([]domain.Account, error) {
@@ -277,7 +327,7 @@ func mapCoreV1Account(item coreV1Account) (domain.Account, error) {
 	}
 	positions := make([]domain.Position, 0, len(item.Positions))
 	for _, position := range item.Positions {
-		mapped, err := coreParsePosition(position.Symbol, position.Quantity)
+		mapped, err := coreParsePosition(position.Symbol, position.Quantity, false)
 		if err != nil {
 			return domain.Account{}, err
 		}
@@ -325,7 +375,7 @@ func mapCoreV2Portfolio(item coreV2Portfolio) (domain.Account, error) {
 	}
 	positions := make([]domain.Position, 0, len(item.Assets))
 	for _, asset := range item.Assets {
-		mapped, err := coreParsePosition(asset.Ticker, asset.Units)
+		mapped, err := coreParsePosition(asset.Ticker, asset.Units, true)
 		if err != nil {
 			return domain.Account{}, err
 		}
@@ -345,23 +395,36 @@ func (c *CoreClient) get(ctx context.Context, endpoint string) (*http.Response, 
 	}
 	response, err := c.client.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("call core: %w", redactedTransportError(err))
+		return nil, newTransportError("core", err)
 	}
 	return response, nil
 }
 
-// redactedTransportError strips the request URL from a client error before it
-// propagates. The upstream request URLs embed sensitive query data (the Core
-// customer identifier and the Market queried tickers), so the *url.Error's URL
-// must not reach logs or public responses. The underlying error is preserved so
-// callers inspecting the chain still observe cancellation and deadline
-// semantics.
-func redactedTransportError(err error) error {
+// transportError renders fixed, payload-independent text while preserving the
+// underlying transport cause through Unwrap. The cause may embed the request
+// URL (which encodes the Core customer identifier or the Market queried
+// tickers) either in a *url.Error field or in its own message, so it is never
+// rendered by Error() and is only exposed via Unwrap so callers inspecting the
+// chain still observe cancellation and deadline semantics.
+type transportError struct {
+	service string
+	cause   error
+}
+
+func (e *transportError) Error() string { return e.service + " transport request failed" }
+
+func (e *transportError) Unwrap() error { return e.cause }
+
+// newTransportError wraps a client transport failure in a fixed safe message.
+// The *url.Error wrapper is stripped from the immediate cause so that layer's
+// URL field is not carried forward, while the remaining chain still resolves to
+// any cancellation or deadline sentinel via errors.Is.
+func newTransportError(service string, err error) error {
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
-		return urlErr.Err
+		return &transportError{service: service, cause: urlErr.Err}
 	}
-	return err
+	return &transportError{service: service, cause: err}
 }
 
 func (c *CoreClient) health(ctx context.Context, baseURL string) error {
@@ -409,7 +472,7 @@ func (c *MarketClient) Prices(ctx context.Context, symbols []string) (map[string
 	}
 	response, err := c.client.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("call market: %w", redactedTransportError(err))
+		return nil, newTransportError("market", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
@@ -444,7 +507,7 @@ func (c *MarketClient) Healthy(ctx context.Context) error {
 	}
 	response, err := c.client.Do(request)
 	if err != nil {
-		return fmt.Errorf("call market health: %w", err)
+		return newTransportError("market health", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
