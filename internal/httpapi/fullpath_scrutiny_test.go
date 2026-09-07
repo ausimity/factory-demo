@@ -57,7 +57,7 @@ func TestFullPathIncompleteSupportedCoreResponseScrutiny(t *testing.T) {
 
 	samples := parsePrometheusSamples(t, path.metricsText())
 	assertRequestCounterLabels(t, samples)
-	assertDurationUnlabeled(t, samples)
+	assertDurationFamily(t, samples)
 
 	assertNoScrutinyDisclosure(t, path, recorder)
 }
@@ -116,27 +116,38 @@ func assertRequestCounterLabels(t *testing.T, samples []promSample) {
 	}
 }
 
-// assertDurationUnlabeled proves the request-duration summary series carry no
-// labels, so duration is never partitioned by request-derived values.
-func assertDurationUnlabeled(t *testing.T, samples []promSample) {
+// assertDurationFamily inspects every gathered sample belonging to the
+// portfolio_http_request_duration_seconds family and requires exactly one
+// unlabeled _sum and one unlabeled _count. It rejects the unsuffixed
+// base/quantile form, _bucket members, duplicate sum/count samples, any labeled
+// sample, and any other unexpected family member, so duration is never
+// partitioned by request-derived values. Samples from unrelated families are
+// ignored.
+func assertDurationFamily(t *testing.T, samples []promSample) {
 	t.Helper()
-	seen := map[string]bool{
-		"portfolio_http_request_duration_seconds_sum":   false,
-		"portfolio_http_request_duration_seconds_count": false,
-	}
+	const family = "portfolio_http_request_duration_seconds"
+	sumSeen, countSeen := 0, 0
 	for _, sample := range samples {
-		if _, ok := seen[sample.name]; !ok {
+		// Family membership: the unsuffixed base/quantile name or any
+		// suffixed member (_sum, _count, _bucket, ...). Unrelated families,
+		// including portfolio_http_requests_total, are skipped.
+		if sample.name != family && !strings.HasPrefix(sample.name, family+"_") {
 			continue
 		}
-		if len(sample.labels) != 0 {
-			t.Fatalf("duration series %q has labels %v, want none", sample.name, sample.labels)
+		switch {
+		case sample.name == family+"_sum" && len(sample.labels) == 0:
+			sumSeen++
+		case sample.name == family+"_count" && len(sample.labels) == 0:
+			countSeen++
+		default:
+			t.Fatalf("unexpected %s family member %q with labels %v", family, sample.name, sample.labels)
 		}
-		seen[sample.name] = true
 	}
-	for name, ok := range seen {
-		if !ok {
-			t.Fatalf("missing duration series %q", name)
-		}
+	if sumSeen != 1 {
+		t.Fatalf("unlabeled %s_sum sample count = %d, want exactly 1", family, sumSeen)
+	}
+	if countSeen != 1 {
+		t.Fatalf("unlabeled %s_count sample count = %d, want exactly 1", family, countSeen)
 	}
 }
 
