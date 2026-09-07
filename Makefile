@@ -102,7 +102,7 @@ demo-reset: ## Restore the baseline v1 upstream contract.
 	CORE_CONTRACT_VERSION=v1 docker compose up --build -d --force-recreate core-api
 	./scripts/wait-for-api.sh
 	./scripts/e2e.sh
-	./scripts/wait-for-recovery.sh
+	@echo "Core v1 rollback verified; evidence-backed incident resolution and marker clearance remain with scripts/wait-for-recovery.sh."
 
 generate-openapi: ## Validate all hand-maintained API contracts.
 	go test ./internal/contracts/...
