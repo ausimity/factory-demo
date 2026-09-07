@@ -68,7 +68,15 @@ validation evidence, and recovered running stack.
 
 ## Recovery
 
-- Restore the healthy baseline: `make demo-reset`
+- Restore the healthy baseline: `make demo-reset`. This is a Core v1 rollback
+  only: it recreates the Core mock on the v1 contract, waits for readiness, and
+  runs the end-to-end checks. It never clears `.local/incidents/active.json`,
+  never modifies incident archives, and never invokes the recovery helper.
+- Resolve an active incident instead with the evidence-backed procedure in
+  [`docs/runbooks/portfolio-availability.md`](runbooks/portfolio-availability.md).
+  Only `scripts/wait-for-recovery.sh` clears the active-incident marker, and
+  only after durable, hash-verified recovery evidence exists and the alert is
+  verified healthy and inactive; it fails closed otherwise.
 - Restart everything: `make down && make demo-baseline`
 - Check runtime state: `docker compose ps`
 - Re-run local validation: `make validate`

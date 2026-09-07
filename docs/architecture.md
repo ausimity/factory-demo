@@ -48,6 +48,18 @@ teams can evolve their own contracts.
 These boundaries localize an upstream contract change to its adapter and tests.
 That is the core design seam exercised by the first Mission.
 
+### Core contract compatibility
+
+The Core adapter recognizes exactly two private wire contracts and strictly
+validates each before mapping: v1 (`customer_id` + `accounts`) and v2
+(`client` + `portfolios`). Either maps into the existing `[]domain.Account`
+values; mixed, incomplete, or unsupported payloads are rejected before any
+Market call. Wire types stay private to `internal/upstream`. This compatibility
+leaves the public OpenAPI contract, service and domain boundaries,
+integer-minor-unit money, timeout behavior, and error redaction unchanged, and
+adds no retries: the observed contract failure was deterministic, not
+transient.
+
 ## Reliability
 
 - Every outbound request carries a context and a client timeout.
@@ -59,6 +71,12 @@ That is the core design seam exercised by the first Mission.
 
 This demo does not implement retries. Retrying malformed contracts cannot help,
 and automatic retries would make the failure less clear during the demonstration.
+
+Incident recovery is serialized: preserve immutable evidence first; reload the
+existing Prometheus process in place (SIGHUP) only when its loaded rule differs
+from the checked-in rule; replace only the `portfolio-api` container; then
+validate counters, alert state, and health. Prometheus is never recreated in
+this non-persistent topology, because recreation would discard alert history.
 
 ## Observability
 

@@ -95,6 +95,12 @@ make security          # source and dependency security reports
 make test-e2e          # verify a running baseline stack
 ```
 
+These gates are distinct. `make validate` is the complete local quality gate
+(static checks, tests, coverage, and builds). `make security` is the separate
+source and dependency security gate. `make test-e2e` exercises an already
+running stack; when validating the active-v2 incident remediation, run it while
+Core demonstrably remains on the v2 contract.
+
 The exact agent instructions and completion rules live in
 [`AGENTS.md`](AGENTS.md). Contributors should also read
 [`CONTRIBUTING.md`](CONTRIBUTING.md).
@@ -115,6 +121,15 @@ The repository supports two Mission-ready change scenarios:
 The full interview storyline is in [`docs/demo-guide.md`](docs/demo-guide.md).
 See [`docs/automation/telemetry-trigger.md`](docs/automation/telemetry-trigger.md)
 for production telemetry-to-Droid automation options.
+
+The availability procedure for the incident scenario is the root-cause-neutral
+runbook
+[`docs/runbooks/portfolio-availability.md`](docs/runbooks/portfolio-availability.md).
+It covers evidence preservation, targeted active-v2 recovery, safe in-place
+Prometheus reload, and v1 rollback. `make demo-reset` performs v1 rollback only;
+evidence-backed incident-marker clearance belongs to
+`scripts/wait-for-recovery.sh`. Incident-specific diagnosis and recovery records
+live in the local, uncommitted `.local/incidents/archive/` evidence archives.
 
 ## Agent readiness
 
