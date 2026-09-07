@@ -233,7 +233,9 @@ func coreParsePosition(symbol *string, quantity *string) (domain.Position, error
 	}
 	value, err := domain.ParseQuantity(*quantity)
 	if err != nil {
-		return domain.Position{}, fmt.Errorf("parse core quantity: %w", err)
+		// The parse error embeds the offending quantity value; return a fixed
+		// safe class instead so a payload-derived quantity cannot reach logs.
+		return domain.Position{}, errors.New("core position quantity failed contract validation")
 	}
 	return domain.Position{Symbol: *symbol, Quantity: value}, nil
 }
@@ -343,9 +345,20 @@ func (c *CoreClient) get(ctx context.Context, endpoint string) (*http.Response, 
 	}
 	response, err := c.client.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("call core: %w", err)
+		return nil, fmt.Errorf("call core: %w", coreTransportError(err))
 	}
 	return response, nil
+}
+
+// coreTransportError strips the request URL, which contains the customer
+// identifier, from a client error while preserving cancellation and deadline
+// semantics for callers that inspect the error chain.
+func coreTransportError(err error) error {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return urlErr.Err
+	}
+	return err
 }
 
 func (c *CoreClient) health(ctx context.Context, baseURL string) error {
