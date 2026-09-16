@@ -57,11 +57,20 @@ type accountResponse struct {
 	Holdings    []holdingResponse `json:"holdings"`
 }
 
+type insightResponse struct {
+	Type       string             `json:"type"`
+	Severity   string             `json:"severity"`
+	Message    string             `json:"message"`
+	Symbol     *string            `json:"symbol"`
+	Percentage percentageResponse `json:"percentage"`
+}
+
 type portfolioResponse struct {
 	CustomerID       string            `json:"customerId"`
 	AsOf             time.Time         `json:"asOf"`
 	TotalMarketValue moneyResponse     `json:"totalMarketValue"`
 	Accounts         []accountResponse `json:"accounts"`
+	Insights         []insightResponse `json:"insights"`
 }
 
 type errorResponse struct {
@@ -105,6 +114,7 @@ func (h *Handler) portfolio(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
+	h.metrics.ObserveInsights(result.Insights)
 	writeJSON(writer, status, mapPortfolio(result))
 }
 
@@ -134,6 +144,22 @@ func mapPortfolio(value domain.Portfolio) portfolioResponse {
 		AsOf:             value.AsOf,
 		TotalMarketValue: mapMoney(value.TotalMarketValue),
 		Accounts:         make([]accountResponse, 0, len(value.Accounts)),
+		Insights:         make([]insightResponse, 0, len(value.Insights)),
+	}
+	for _, insight := range value.Insights {
+		item := insightResponse{
+			Type:       string(insight.Type),
+			Severity:   string(insight.Severity),
+			Message:    insight.Message,
+			Percentage: newPercentageResponse(insight.Percentage.String()),
+		}
+		// A concentration insight names its symbol; a cash-buffer insight has
+		// none and serializes symbol as JSON null.
+		if insight.Symbol != "" {
+			symbol := insight.Symbol
+			item.Symbol = &symbol
+		}
+		response.Insights = append(response.Insights, item)
 	}
 	for _, account := range value.Accounts {
 		item := accountResponse{

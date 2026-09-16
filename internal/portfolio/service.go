@@ -92,6 +92,7 @@ func (s *Service) Get(ctx context.Context, customerID string) (domain.Portfolio,
 		result.Accounts = append(result.Accounts, accountPortfolio)
 	}
 
+	result.Insights = Insights(result)
 	return result, nil
 }
 

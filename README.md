@@ -17,18 +17,57 @@ Prerequisites:
 
 - Go 1.26 or later
 - Docker with Compose
-- `make` and `curl`
+- `make`, `curl`, and `jq`
 
-Start and verify the complete baseline:
+Download dependencies:
+
+```bash
+make deps
+```
+
+Start and verify the complete baseline. `make up` starts the Core v1 stack
+(`CORE_CONTRACT_VERSION=v1`) and `make demo-baseline` additionally waits for
+readiness and runs the end-to-end checks:
 
 ```bash
 make demo-baseline
 ```
 
+Readiness is reported at `/health/ready`; process liveness at `/health/live`.
+
 Then request the seeded customer's portfolio:
 
 ```bash
-curl --silent http://localhost:8080/api/v1/customers/cust-1001/portfolio
+curl --silent http://localhost:8080/api/v1/customers/cust-1001/portfolio | jq
+```
+
+The seeded `cust-1001` portfolio totals `34375.00 USD` across two accounts
+(`21025.00 USD` and `13350.00 USD`) and returns exactly two ordered insights:
+
+```json
+"insights": [
+  {
+    "type": "CONCENTRATION",
+    "severity": "WARN",
+    "message": "AAPL represents 54% of portfolio value; concentration insights are generated above 50%.",
+    "symbol": "AAPL",
+    "percentage": 54
+  },
+  {
+    "type": "CASH_BUFFER",
+    "severity": "INFO",
+    "message": "Cash represents 15% of portfolio value; cash-buffer status is informational at or above 10%.",
+    "symbol": null,
+    "percentage": 15
+  }
+]
+```
+
+Inspect the bounded insight counter, which exposes only the two fixed type
+series:
+
+```bash
+curl --silent http://localhost:8080/metrics | grep portfolio_insights_generated_total
 ```
 
 Useful local URLs:
