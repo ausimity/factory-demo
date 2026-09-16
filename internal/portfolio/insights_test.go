@@ -3,12 +3,91 @@ package portfolio_test
 import (
 	"context"
 	"fmt"
+	"math"
+	"math/big"
 	"reflect"
 	"testing"
 
 	"github.com/factory-demo/portfolio-api/internal/domain"
 	"github.com/factory-demo/portfolio-api/internal/portfolio"
 )
+
+// mustPct builds a domain.Percentage from a machine-integer test literal.
+func mustPct(v int64) domain.Percentage {
+	p, err := domain.NewPercentage(big.NewInt(v))
+	if err != nil {
+		panic(err)
+	}
+	return p
+}
+
+// mustBigPct builds a domain.Percentage from a base-10 literal that exceeds a
+// machine integer, so total-consistent overflow fixtures can assert exact digits.
+func mustBigPct(digits string) domain.Percentage {
+	value, ok := new(big.Int).SetString(digits, 10)
+	if !ok {
+		panic("invalid percentage digits: " + digits)
+	}
+	p, err := domain.NewPercentage(value)
+	if err != nil {
+		panic(err)
+	}
+	return p
+}
+
+// TestInsightsUnboundedPercentage proves total-consistent portfolios whose exact
+// rounded percentage exceeds int64 preserve every digit. Total 1 with a MaxInt64
+// concentration numerator renders 100*MaxInt64 exactly, its offsetting negative
+// cash clamps to zero, and the symmetric MaxInt64 cash numerator renders the same
+// huge value as an INFO cash buffer. The bug narrowed this to -100 via int64.
+func TestInsightsUnboundedPercentage(t *testing.T) {
+	t.Parallel()
+
+	const huge = "922337203685477580700" // 100 * math.MaxInt64
+
+	t.Run("concentration numerator with offsetting negative cash", func(t *testing.T) {
+		t.Parallel()
+		got := portfolio.Insights(buildPortfolio(1, []accountSpec{
+			{cash: 1 - math.MaxInt64, holdings: []holdingSpec{{"SYM", math.MaxInt64}}},
+		}))
+		want := []domain.Insight{
+			{
+				Type:       domain.InsightConcentration,
+				Severity:   domain.SeverityWarn,
+				Symbol:     "SYM",
+				Percentage: mustBigPct(huge),
+				Message:    "SYM represents " + huge + "% of portfolio value; concentration insights are generated above 50%.",
+			},
+			{
+				Type:       domain.InsightCashBuffer,
+				Severity:   domain.SeverityWarn,
+				Percentage: mustPct(0),
+				Message:    "Cash represents 0% of portfolio value; cash-buffer status is warning below 10%.",
+			},
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("Insights() = %#v, want %#v", got, want)
+		}
+	})
+
+	t.Run("positive cash numerator with offsetting negative holding", func(t *testing.T) {
+		t.Parallel()
+		got := portfolio.Insights(buildPortfolio(1, []accountSpec{
+			{cash: math.MaxInt64, holdings: []holdingSpec{{"SYM", 1 - math.MaxInt64}}},
+		}))
+		want := []domain.Insight{
+			{
+				Type:       domain.InsightCashBuffer,
+				Severity:   domain.SeverityInfo,
+				Percentage: mustBigPct(huge),
+				Message:    "Cash represents " + huge + "% of portfolio value; cash-buffer status is informational at or above 10%.",
+			},
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("Insights() = %#v, want %#v", got, want)
+		}
+	})
+}
 
 type holdingSpec struct {
 	symbol string
@@ -52,7 +131,7 @@ func conc(symbol string, pct int) domain.Insight {
 		Type:       domain.InsightConcentration,
 		Severity:   domain.SeverityWarn,
 		Symbol:     symbol,
-		Percentage: pct,
+		Percentage: mustPct(int64(pct)),
 		Message: fmt.Sprintf(
 			"%s represents %d%% of portfolio value; concentration insights are generated above 50%%.",
 			symbol, pct,
@@ -64,7 +143,7 @@ func cashInfo(pct int) domain.Insight {
 	return domain.Insight{
 		Type:       domain.InsightCashBuffer,
 		Severity:   domain.SeverityInfo,
-		Percentage: pct,
+		Percentage: mustPct(int64(pct)),
 		Message: fmt.Sprintf(
 			"Cash represents %d%% of portfolio value; cash-buffer status is informational at or above 10%%.",
 			pct,
@@ -76,7 +155,7 @@ func cashWarn(pct int) domain.Insight {
 	return domain.Insight{
 		Type:       domain.InsightCashBuffer,
 		Severity:   domain.SeverityWarn,
-		Percentage: pct,
+		Percentage: mustPct(int64(pct)),
 		Message: fmt.Sprintf(
 			"Cash represents %d%% of portfolio value; cash-buffer status is warning below 10%%.",
 			pct,
@@ -321,8 +400,8 @@ func TestInsightsNearInt64ConcentrationRounding(t *testing.T) {
 			if c.Severity != domain.SeverityWarn {
 				t.Fatalf("severity = %q, want WARN", c.Severity)
 			}
-			if c.Percentage != tc.wantPct {
-				t.Fatalf("percentage = %d, want %d", c.Percentage, tc.wantPct)
+			if c.Percentage != mustPct(int64(tc.wantPct)) {
+				t.Fatalf("percentage = %s, want %d", c.Percentage.String(), tc.wantPct)
 			}
 		})
 	}
@@ -356,8 +435,8 @@ func TestInsightsNearInt64CashRounding(t *testing.T) {
 			if c.Severity != domain.SeverityInfo {
 				t.Fatalf("severity = %q, want INFO", c.Severity)
 			}
-			if c.Percentage != tc.wantPct {
-				t.Fatalf("percentage = %d, want %d", c.Percentage, tc.wantPct)
+			if c.Percentage != mustPct(int64(tc.wantPct)) {
+				t.Fatalf("percentage = %s, want %d", c.Percentage.String(), tc.wantPct)
 			}
 		})
 	}

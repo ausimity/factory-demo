@@ -2,6 +2,7 @@ package httpapi_test
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -86,6 +87,28 @@ func TestOpenAPIAcceptsValidInsightResponses(t *testing.T) {
 	}
 	if err := schema.VisitJSON(emptyInsightResponse(t)); err != nil {
 		t.Fatalf("schema rejected valid empty-array response: %v", err)
+	}
+}
+
+// TestOpenAPIHandlesHugeIntegerPercentage proves the unchanged integer schema
+// accepts a percentage beyond int64 (no maximum or format is declared) and still
+// rejects a quoted percentage. This guards the arbitrary-precision output against
+// a regression back to a bounded numeric type.
+func TestOpenAPIHandlesHugeIntegerPercentage(t *testing.T) {
+	t.Parallel()
+	schema := portfolioResponseSchema(t)
+
+	accepted := deepClone(t, populatedInsightResponse(t))
+	// A whole-number value well beyond int64 must still validate as an integer.
+	firstInsight(t, accepted)["percentage"] = float64(math.MaxInt64) * 100
+	if err := schema.VisitJSON(accepted); err != nil {
+		t.Fatalf("schema rejected huge integer percentage: %v", err)
+	}
+
+	rejected := deepClone(t, populatedInsightResponse(t))
+	firstInsight(t, rejected)["percentage"] = "922337203685477580700"
+	if err := schema.VisitJSON(rejected); err == nil {
+		t.Fatalf("schema accepted quoted percentage")
 	}
 }
 

@@ -58,11 +58,11 @@ type accountResponse struct {
 }
 
 type insightResponse struct {
-	Type       string  `json:"type"`
-	Severity   string  `json:"severity"`
-	Message    string  `json:"message"`
-	Symbol     *string `json:"symbol"`
-	Percentage int     `json:"percentage"`
+	Type       string            `json:"type"`
+	Severity   string            `json:"severity"`
+	Message    string            `json:"message"`
+	Symbol     *string           `json:"symbol"`
+	Percentage domain.Percentage `json:"percentage"`
 }
 
 type portfolioResponse struct {

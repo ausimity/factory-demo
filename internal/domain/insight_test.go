@@ -1,10 +1,19 @@
 package domain_test
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/factory-demo/portfolio-api/internal/domain"
 )
+
+func mustPercentage(v int64) domain.Percentage {
+	p, err := domain.NewPercentage(big.NewInt(v))
+	if err != nil {
+		panic(err)
+	}
+	return p
+}
 
 func TestInsightCanonicalConstants(t *testing.T) {
 	t.Parallel()
@@ -33,7 +42,7 @@ func TestPortfolioCarriesInsights(t *testing.T) {
 			Type:       domain.InsightConcentration,
 			Severity:   domain.SeverityWarn,
 			Symbol:     "AAPL",
-			Percentage: 54,
+			Percentage: mustPercentage(54),
 			Message:    "AAPL represents 54% of portfolio value; concentration insights are generated above 50%.",
 		}},
 	}

@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	concentrationMessage = "%s represents %d%% of portfolio value; concentration insights are generated above 50%%."
-	cashInfoMessage      = "Cash represents %d%% of portfolio value; cash-buffer status is informational at or above 10%%."
-	cashWarnMessage      = "Cash represents %d%% of portfolio value; cash-buffer status is warning below 10%%."
+	concentrationMessage = "%s represents %s%% of portfolio value; concentration insights are generated above 50%%."
+	cashInfoMessage      = "Cash represents %s%% of portfolio value; cash-buffer status is informational at or above 10%%."
+	cashWarnMessage      = "Cash represents %s%% of portfolio value; cash-buffer status is warning below 10%%."
 )
 
 // Insights derives deterministic, non-advisory portfolio insights from an
@@ -51,7 +51,7 @@ func Insights(p domain.Portfolio) []domain.Insight {
 		value := symbolValues[symbol]
 		// Strictly greater than one half: 2*value > total.
 		if new(big.Int).Lsh(value, 1).Cmp(total) > 0 {
-			percentage := displayPercent(value, total)
+			percentage := toPercentage(displayPercent(value, total))
 			insights = append(insights, domain.Insight{
 				Type:       domain.InsightConcentration,
 				Severity:   domain.SeverityWarn,
@@ -67,10 +67,11 @@ func Insights(p domain.Portfolio) []domain.Insight {
 }
 
 func cashInsight(cash, total *big.Int) domain.Insight {
-	percentage := displayPercent(cash, total)
+	rounded := displayPercent(cash, total)
 
 	// Severity uses the exact ratio (cash*10 >= total), never the rounded display.
 	if new(big.Int).Mul(cash, big.NewInt(10)).Cmp(total) >= 0 {
+		percentage := toPercentage(rounded)
 		return domain.Insight{
 			Type:       domain.InsightCashBuffer,
 			Severity:   domain.SeverityInfo,
@@ -79,10 +80,12 @@ func cashInsight(cash, total *big.Int) domain.Insight {
 		}
 	}
 
-	// Only negative cash display is clamped to zero, after the severity decision.
-	if percentage < 0 {
-		percentage = 0
+	// Only negative cash display is clamped to zero, after the severity decision
+	// and before constructing the nonnegative domain percentage.
+	if rounded.Sign() < 0 {
+		rounded = big.NewInt(0)
 	}
+	percentage := toPercentage(rounded)
 	return domain.Insight{
 		Type:       domain.InsightCashBuffer,
 		Severity:   domain.SeverityWarn,
@@ -95,10 +98,22 @@ func cashInsight(cash, total *big.Int) domain.Insight {
 // nearest integer with exact halves rounded upward (toward positive infinity).
 // total must be strictly positive. big.Int.Div floors toward negative infinity
 // for a positive divisor, which yields the correct half-up result for the
-// pre-biased numerator, including negative values.
-func displayPercent(value, total *big.Int) int {
+// pre-biased numerator, including negative values. The exact arbitrary-precision
+// result is preserved; it is never narrowed through int or int64.
+func displayPercent(value, total *big.Int) *big.Int {
 	numerator := new(big.Int).Mul(value, big.NewInt(200)) // 2 * value * 100
 	numerator.Add(numerator, total)
 	denominator := new(big.Int).Mul(total, big.NewInt(2))
-	return int(new(big.Int).Div(numerator, denominator).Int64())
+	return new(big.Int).Div(numerator, denominator)
+}
+
+// toPercentage converts a rounded ratio into the immutable domain percentage.
+// Concentration ratios are always positive and cash is clamped to zero before
+// this call, so construction of the nonnegative invariant cannot fail here.
+func toPercentage(rounded *big.Int) domain.Percentage {
+	percentage, err := domain.NewPercentage(rounded)
+	if err != nil {
+		return domain.Percentage{}
+	}
+	return percentage
 }

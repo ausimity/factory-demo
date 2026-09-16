@@ -19,11 +19,12 @@ const (
 
 // Insight is a transport-neutral, non-advisory portfolio observation. Symbol is
 // present for concentration insights and empty for cash-buffer insights.
-// Percentage is a whole-number display percentage.
+// Percentage is an arbitrary-precision, nonnegative whole-number display
+// percentage that never narrows through a machine integer.
 type Insight struct {
 	Type       InsightType
 	Severity   InsightSeverity
 	Message    string
 	Symbol     string
-	Percentage int
+	Percentage Percentage
 }
