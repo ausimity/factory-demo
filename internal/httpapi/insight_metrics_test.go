@@ -125,6 +125,56 @@ func TestInsightCounterIncrementsForSuccessfulResponse(t *testing.T) {
 	}
 }
 
+// TestInsightCounterIncrementsByReturnedInsightCount proves a successful HTTP 200
+// body containing two concentration insights and one cash insight increments the
+// series by exactly +2 and +1, with both deltas derived from the insights
+// actually present in the response body rather than a fixed expectation.
+func TestInsightCounterIncrementsByReturnedInsightCount(t *testing.T) {
+	t.Parallel()
+
+	// A total-consistent portfolio whose two holdings each exceed one half of the
+	// finalized total because an offsetting negative cash balance lowers the
+	// denominator. It yields two CONCENTRATION insights plus the single
+	// CASH_BUFFER insight required for any positive total.
+	accounts := []domain.Account{{
+		ID:   "acct-1",
+		Type: "BROKERAGE",
+		Cash: mustMoney(t, -600000),
+		Positions: []domain.Position{
+			{Symbol: "AAA", Quantity: mustQuantity(t, "1")},
+			{Symbol: "BBB", Quantity: mustQuantity(t, "1")},
+		},
+	}}
+	prices := map[string]domain.Price{
+		"AAA": insightPrice(t, "AAA", 800000),
+		"BBB": insightPrice(t, "BBB", 800000),
+	}
+	handler, metrics := serviceHandler(t, portfolio.NewService(insightAccounts{accounts: accounts}, insightPrices{prices: prices}))
+
+	before := insightMetricCounts(t, exposeMetrics(metrics))
+	if before["CONCENTRATION"] != 0 || before["CASH_BUFFER"] != 0 {
+		t.Fatalf("baseline = %v, want both zero", before)
+	}
+
+	recorder := getPortfolio(handler, "cust-1001")
+	assertStatus(t, recorder, http.StatusOK)
+
+	wantDelta := insightBodyCountsByType(t, recorder.Body.Bytes())
+	if wantDelta["CONCENTRATION"] != 2 || wantDelta["CASH_BUFFER"] != 1 {
+		t.Fatalf("returned body insight counts = %v, want CONCENTRATION=2 CASH_BUFFER=1", wantDelta)
+	}
+
+	after := insightMetricCounts(t, exposeMetrics(metrics))
+	if len(after) != 2 {
+		t.Fatalf("insight series = %v, want exactly two", after)
+	}
+	for _, typ := range []string{"CONCENTRATION", "CASH_BUFFER"} {
+		if got := after[typ] - before[typ]; got != wantDelta[typ] {
+			t.Fatalf("%s delta = %d, want %d", typ, got, wantDelta[typ])
+		}
+	}
+}
+
 // TestInsightCounterCountsConcurrentSuccessfulRequests proves concurrent
 // successful requests finish at the arithmetic sum of their returned insights
 // under the race detector.
@@ -198,6 +248,33 @@ func TestInsightCounterUnchangedOnNonCountingPaths(t *testing.T) {
 		assertStatus(t, recorder, http.StatusOK)
 		if !strings.Contains(recorder.Body.String(), `"insights":[]`) {
 			t.Fatalf("expected empty insights array, got %s", recorder.Body.String())
+		}
+		assertZero(t, exposeMetrics(metrics))
+	})
+
+	t.Run("negative-total success", func(t *testing.T) {
+		t.Parallel()
+		// A total-consistent negative-total portfolio: a positive holding fully
+		// offset by a larger negative cash balance drives the finalized total
+		// below zero. The request still returns HTTP 200 with a real empty
+		// insights array and must leave both counters at zero.
+		accounts := []domain.Account{{
+			ID:        "acct-1",
+			Type:      "BROKERAGE",
+			Cash:      mustMoney(t, -600000),
+			Positions: []domain.Position{{Symbol: "AAA", Quantity: mustQuantity(t, "1")}},
+		}}
+		handler, metrics := serviceHandler(t, portfolio.NewService(
+			insightAccounts{accounts: accounts},
+			insightPrices{prices: map[string]domain.Price{"AAA": insightPrice(t, "AAA", 500000)}},
+		))
+		recorder := getPortfolio(handler, "cust-1001")
+		assertStatus(t, recorder, http.StatusOK)
+		if !strings.Contains(recorder.Body.String(), `"insights":[]`) {
+			t.Fatalf("expected empty insights array, got %s", recorder.Body.String())
+		}
+		if counts := insightBodyCountsByType(t, recorder.Body.Bytes()); len(counts) != 0 {
+			t.Fatalf("body insight counts = %v, want none", counts)
 		}
 		assertZero(t, exposeMetrics(metrics))
 	})

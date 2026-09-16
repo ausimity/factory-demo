@@ -24,9 +24,16 @@ insight_counter() {
   awk -v pat="portfolio_insights_generated_total{type=\"$2\"}" '$1 == pat { print $2 }' "$1"
 }
 
-# insight_types prints the sorted set of insight type label values present.
-insight_types() {
-  sed -n 's/^portfolio_insights_generated_total{type="\([^"]*\)"}.*/\1/p' "$1" | sort
+# insight_series prints the sorted series identifier (metric name plus its label
+# block) of every sample in the insight counter family, whether or not it carries
+# labels. Because a sample's label block contains no spaces, the first
+# whitespace-delimited field is the complete series identifier. Inventorying
+# every sample this way, rather than filtering only the well-formed single-label
+# lines, lets the caller reject unlabeled, extra-label, duplicate, or
+# unexpected-type series instead of silently ignoring them.
+insight_series() {
+  awk '$1 == "portfolio_insights_generated_total" ||
+       $1 ~ /^portfolio_insights_generated_total[{]/ { print $1 }' "$1" | sort
 }
 
 # Capture the insight counters before issuing exactly one seeded request.
@@ -61,12 +68,16 @@ post_cash="$(insight_counter "$post_metrics" CASH_BUFFER)"
 : "${post_concentration:?post-request CONCENTRATION insight series missing}"
 : "${post_cash:?post-request CASH_BUFFER insight series missing}"
 
-# The instrument exposes exactly the two approved type series and no other.
-observed_types="$(insight_types "$post_metrics")"
-expected_types="$(printf '%s\n%s\n' CASH_BUFFER CONCENTRATION)"
-if [ "$observed_types" != "$expected_types" ]; then
-  echo "unexpected insight type series present:" >&2
-  echo "$observed_types" >&2
+# The instrument must expose exactly the two approved single-label series and no
+# other. Comparing the complete sorted series inventory rejects any unlabeled,
+# extra-label, duplicate, or unexpected-type sample rather than accepting it.
+observed_series="$(insight_series "$post_metrics")"
+expected_series="$(printf '%s\n%s\n' \
+  'portfolio_insights_generated_total{type="CASH_BUFFER"}' \
+  'portfolio_insights_generated_total{type="CONCENTRATION"}')"
+if [ "$observed_series" != "$expected_series" ]; then
+  echo "unexpected insight counter series inventory:" >&2
+  echo "$observed_series" >&2
   exit 1
 fi
 
