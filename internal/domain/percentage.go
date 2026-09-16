@@ -37,9 +37,3 @@ func (p Percentage) String() string {
 	}
 	return p.digits
 }
-
-// MarshalJSON renders the percentage as an unquoted base-10 JSON integer token,
-// preserving every digit without narrowing through a machine integer.
-func (p Percentage) MarshalJSON() ([]byte, error) {
-	return []byte(p.String()), nil
-}

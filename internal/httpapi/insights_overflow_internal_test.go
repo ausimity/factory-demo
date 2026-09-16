@@ -1,9 +1,9 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"math/big"
-	"strings"
 	"testing"
 
 	"github.com/factory-demo/portfolio-api/internal/domain"
@@ -43,11 +43,26 @@ func TestMapPortfolioRendersHugePercentageAsUnquotedInteger(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	body := string(raw)
-	if !strings.Contains(body, `"percentage":`+huge) {
-		t.Fatalf("expected unquoted huge integer token, got %s", body)
+	if bytes.Contains(raw, []byte(`"percentage":"`)) {
+		t.Fatalf("percentage must not be quoted: %s", raw)
 	}
-	if strings.Contains(body, `"percentage":"`) {
-		t.Fatalf("percentage must not be quoted: %s", body)
+
+	// Decode with UseNumber so the extreme integer is preserved exactly as its
+	// digits rather than narrowed through a float64 approximation.
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var decoded struct {
+		Insights []struct {
+			Percentage json.Number `json:"percentage"`
+		} `json:"insights"`
+	}
+	if err := decoder.Decode(&decoded); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(decoded.Insights) != 1 {
+		t.Fatalf("insights = %d, want 1", len(decoded.Insights))
+	}
+	if got := decoded.Insights[0].Percentage; got != json.Number(huge) {
+		t.Fatalf("percentage = %s, want %s", got, huge)
 	}
 }

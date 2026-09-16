@@ -58,11 +58,11 @@ type accountResponse struct {
 }
 
 type insightResponse struct {
-	Type       string            `json:"type"`
-	Severity   string            `json:"severity"`
-	Message    string            `json:"message"`
-	Symbol     *string           `json:"symbol"`
-	Percentage domain.Percentage `json:"percentage"`
+	Type       string             `json:"type"`
+	Severity   string             `json:"severity"`
+	Message    string             `json:"message"`
+	Symbol     *string            `json:"symbol"`
+	Percentage percentageResponse `json:"percentage"`
 }
 
 type portfolioResponse struct {
@@ -151,7 +151,7 @@ func mapPortfolio(value domain.Portfolio) portfolioResponse {
 			Type:       string(insight.Type),
 			Severity:   string(insight.Severity),
 			Message:    insight.Message,
-			Percentage: insight.Percentage,
+			Percentage: newPercentageResponse(insight.Percentage.String()),
 		}
 		// A concentration insight names its symbol; a cash-buffer insight has
 		// none and serializes symbol as JSON null.
