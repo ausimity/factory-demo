@@ -105,10 +105,32 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Holding"
+    Insight:
+      type: object
+      additionalProperties: false
+      required: [type, severity, message, symbol, percentage]
+      properties:
+        type:
+          type: string
+          enum: [CONCENTRATION, CASH_BUFFER]
+        severity:
+          type: string
+          enum: [INFO, WARN]
+        message:
+          type: string
+          example: >-
+            AAPL represents 54% of portfolio value; concentration insights are
+            generated above 50%.
+        symbol:
+          type: [string, "null"]
+          example: AAPL
+        percentage:
+          type: integer
+          example: 54
     Portfolio:
       type: object
       additionalProperties: false
-      required: [customerId, asOf, totalMarketValue, accounts]
+      required: [customerId, asOf, totalMarketValue, accounts, insights]
       properties:
         customerId:
           type: string
@@ -123,6 +145,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Account"
+        insights:
+          type: array
+          items:
+            $ref: "#/components/schemas/Insight"
     Error:
       type: object
       additionalProperties: false
