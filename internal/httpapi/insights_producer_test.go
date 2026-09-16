@@ -237,16 +237,9 @@ func assertExactFiveKeys(t *testing.T, item map[string]json.RawMessage) {
 func assertCrossFieldMatrix(t *testing.T, item map[string]json.RawMessage, want expectedInsight) {
 	t.Helper()
 
-	var gotType, gotSeverity, gotMessage string
-	if err := json.Unmarshal(item["type"], &gotType); err != nil {
-		t.Fatalf("type not a string: %v", err)
-	}
-	if err := json.Unmarshal(item["severity"], &gotSeverity); err != nil {
-		t.Fatalf("severity not a string: %v", err)
-	}
-	if err := json.Unmarshal(item["message"], &gotMessage); err != nil {
-		t.Fatalf("message not a string: %v", err)
-	}
+	gotType := requireJSONString(t, item, "type")
+	gotSeverity := requireJSONString(t, item, "severity")
+	gotMessage := requireJSONString(t, item, "message")
 	if gotMessage == "" {
 		t.Fatalf("message must be a non-empty string")
 	}
@@ -255,23 +248,7 @@ func assertCrossFieldMatrix(t *testing.T, item map[string]json.RawMessage, want 
 		t.Fatalf("type/severity = %s/%s, want %s/%s", gotType, gotSeverity, want.insightType, want.severity)
 	}
 
-	// Enforce the exact permitted cross-field matrix.
-	switch {
-	case gotType == "CONCENTRATION" && gotSeverity == "WARN":
-		var symbol string
-		if err := json.Unmarshal(item["symbol"], &symbol); err != nil || symbol == "" {
-			t.Fatalf("concentration symbol must be a non-null non-empty string, got %s", item["symbol"])
-		}
-		if symbol != want.symbol {
-			t.Fatalf("symbol = %q, want %q", symbol, want.symbol)
-		}
-	case gotType == "CASH_BUFFER" && (gotSeverity == "INFO" || gotSeverity == "WARN"):
-		if string(item["symbol"]) != "null" {
-			t.Fatalf("cash-buffer symbol must be JSON null, got %s", item["symbol"])
-		}
-	default:
-		t.Fatalf("invalid type/severity combination %s/%s", gotType, gotSeverity)
-	}
+	assertInsightSymbol(t, item["symbol"], gotType, gotSeverity, want.symbol)
 
 	var gotPercentage int
 	if err := json.Unmarshal(item["percentage"], &gotPercentage); err != nil {
@@ -279,5 +256,37 @@ func assertCrossFieldMatrix(t *testing.T, item map[string]json.RawMessage, want 
 	}
 	if gotPercentage != want.percentage {
 		t.Fatalf("percentage = %d, want %d", gotPercentage, want.percentage)
+	}
+}
+
+func requireJSONString(t *testing.T, item map[string]json.RawMessage, field string) string {
+	t.Helper()
+
+	var value string
+	if err := json.Unmarshal(item[field], &value); err != nil {
+		t.Fatalf("%s not a string: %v", field, err)
+	}
+	return value
+}
+
+func assertInsightSymbol(t *testing.T, raw json.RawMessage, gotType, gotSeverity, wantSymbol string) {
+	t.Helper()
+
+	// Enforce the exact permitted cross-field matrix.
+	switch {
+	case gotType == "CONCENTRATION" && gotSeverity == "WARN":
+		var symbol string
+		if err := json.Unmarshal(raw, &symbol); err != nil || symbol == "" {
+			t.Fatalf("concentration symbol must be a non-null non-empty string, got %s", raw)
+		}
+		if symbol != wantSymbol {
+			t.Fatalf("symbol = %q, want %q", symbol, wantSymbol)
+		}
+	case gotType == "CASH_BUFFER" && (gotSeverity == "INFO" || gotSeverity == "WARN"):
+		if string(raw) != "null" {
+			t.Fatalf("cash-buffer symbol must be JSON null, got %s", raw)
+		}
+	default:
+		t.Fatalf("invalid type/severity combination %s/%s", gotType, gotSeverity)
 	}
 }
