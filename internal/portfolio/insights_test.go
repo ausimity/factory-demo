@@ -264,7 +264,7 @@ func TestInsightsPolicy(t *testing.T) {
 		{
 			name:  "concentration just below half increment rounds down",
 			total: 1000,
-			accs:  []accountSpec{{cash: 487, holdings: []holdingSpec{{"SYM", 513}}}},
+			accs:  []accountSpec{{cash: 486, holdings: []holdingSpec{{"SYM", 514}}}},
 			want:  []domain.Insight{conc("SYM", 51), cashInfo(49)},
 		},
 		{
@@ -276,7 +276,7 @@ func TestInsightsPolicy(t *testing.T) {
 		{
 			name:  "concentration just above half increment rounds up",
 			total: 1000,
-			accs:  []accountSpec{{cash: 483, holdings: []holdingSpec{{"SYM", 517}}}},
+			accs:  []accountSpec{{cash: 484, holdings: []holdingSpec{{"SYM", 516}}}},
 			want:  []domain.Insight{conc("SYM", 52), cashInfo(48)},
 		},
 		{
