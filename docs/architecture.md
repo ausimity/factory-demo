@@ -32,8 +32,12 @@ teams can evolve their own contracts.
 2. The portfolio service asks the account port for balances and positions.
 3. The service asks the price port for the unique symbols it discovered.
 4. Domain types calculate each holding, account, and portfolio market value.
-5. The handler maps domain values into the stable public response.
-6. Logs, metrics, and traces record operational facts without recording payloads.
+5. A pure post-aggregation policy evaluates the finalized portfolio and attaches
+   deterministic insights.
+6. The handler maps domain values and insights into the stable public response.
+7. On a successful response the handler records bounded per-type insight counts
+   alongside the existing request metrics.
+8. Logs, metrics, and traces record operational facts without recording payloads.
 
 ## Boundaries
 
@@ -60,6 +64,29 @@ integer-minor-unit money, timeout behavior, and error redaction unchanged, and
 adds no retries: the observed contract failure was deterministic, not
 transient.
 
+### Portfolio insights
+
+Personalized insights are layered onto the existing aggregation without touching
+upstream contracts or financial calculations:
+
+- `internal/domain` owns the transport-neutral insight value (type, severity,
+  message, optional symbol, whole-number display percentage) with no JSON,
+  OpenAPI, or metric annotations.
+- `internal/portfolio` owns the pure policy, evaluated only after account,
+  holding, and total market values are finalized. It compares exact integer
+  ratios (never floating point and never a rounded display value) to decide
+  concentration and cash-buffer status, renders display percentages with
+  half-up rounding, and sorts deterministically. It makes no buy/sell
+  recommendation and reads no I/O.
+- `internal/httpapi` maps insights into the required `insights` array of the
+  public response, serializing the cash-buffer symbol as JSON `null`.
+- `internal/observability` owns bounded counting.
+
+This feature adds no new I/O, service, port, upstream call, floating-point
+threshold decision, sensitive logging, or advisory recommendation. Upstream
+contracts and adapters, money and quantity arithmetic, account and holding
+values, totals, error behavior, and Core v1/v2 compatibility are unchanged.
+
 ## Reliability
 
 - Every outbound request carries a context and a client timeout.
@@ -82,12 +109,19 @@ this non-persistent topology, because recreation would discard alert history.
 
 - JSON logs go to stdout and `.local/logs/*.jsonl`.
 - Prometheus scrapes request totals and request duration.
+- The `portfolio_insights_generated_total` counter records generated insights.
+  Its only label is `type`, whose only values are the two fixed insight types
+  `CONCENTRATION` and `CASH_BUFFER`. A successful response increments each series
+  once per generated insight; failed, empty-insight, health, readiness, and
+  metric-scrape paths never increment it. The instrument never gains a customer,
+  account, symbol, message, severity, status, or other request-derived label.
 - Grafana provisions a focused API dashboard.
 - OpenTelemetry traces include inbound requests and outbound HTTP calls.
 - Health endpoints separate process liveness from dependency readiness.
 
-Synthetic identifiers are not logged. If the system later handles real customer
-data, the same prohibition remains mandatory.
+Synthetic identifiers are not logged, and neither are insight messages, symbols,
+or severities. If the system later handles real customer data, the same
+prohibition remains mandatory.
 
 ## Decisions
 

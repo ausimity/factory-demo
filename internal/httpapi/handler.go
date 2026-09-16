@@ -114,6 +114,7 @@ func (h *Handler) portfolio(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
+	h.metrics.ObserveInsights(result.Insights)
 	writeJSON(writer, status, mapPortfolio(result))
 }
 
