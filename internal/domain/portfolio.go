@@ -40,4 +40,5 @@ type Portfolio struct {
 	AsOf             time.Time
 	TotalMarketValue Money
 	Accounts         []AccountPortfolio
+	Insights         []Insight
 }
