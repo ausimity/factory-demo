@@ -34,7 +34,7 @@ jobs:
           go tool gotestsum tool slowest --jsonfile artifacts/test-results.json --num 10 >> "$GITHUB_STEP_SUMMARY"
       - name: Retain test timing and coverage
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: |
@@ -60,7 +60,7 @@ jobs:
         run: make security
       - name: Retain readable security reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: security-reports
           path: |
